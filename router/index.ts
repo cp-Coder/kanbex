@@ -1,22 +1,11 @@
-import zod from "zod"
-import { publicProcedure, router } from "../trpc"
+import { router } from "../trpc"
+import { authRouter } from "./auth";
+import { boardRouter } from "./board";
+import { userRouter } from "./user";
 export const appRouter = router({
-  hello: publicProcedure
-    .meta({
-      openapi: {
-        method: "GET",
-        path: "/hello",
-      }
-    })
-    .input(zod.object({}))
-    .output(zod.object({
-      hello: zod.string()
-    }))
-    .query(() => {
-      return {
-        hello: "Hello world"
-    }
-  }) 
+  auth: authRouter,
+  user: userRouter,
+  board: boardRouter,
 })
 
 export type AppRouter = typeof appRouter;

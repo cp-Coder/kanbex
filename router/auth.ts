@@ -1,11 +1,10 @@
-import zod from "zod";
+import z from "zod";
 import bcrypt from "bcrypt";
 import { TRPCError } from "@trpc/server";
 import jwt from "jsonwebtoken";
 
 import { publicProcedure, router } from "../trpc";
-import { env } from "../env.mjs";
-import { User } from "@prisma/client";
+import { env } from "../env";
 
 /**
  * Router for authentication procedures
@@ -33,51 +32,60 @@ export const authRouter = router({
     .meta({
       openapi: {
         method: "POST",
-        path: "/register",
+        path: "/auth/register",
         tags: ["auth"],
         summary: "Register a new user",
       }
     })
-    .input(zod.object({
-      username: zod.string().min(3),
-      name: zod.string().min(3),
-      email: zod.string().email(),
-      password: zod.string().min(8),
+    .input(z.object({
+      username: z.string().min(3),
+      name: z.string().min(3),
+      email: z.string().email(),
+      password: z.string().min(8),
     }))
-    .output(zod.object({
-      user: zod.object({
-        externalID: zod.string(),
-        username: zod.string(),
-        email: zod.string(),
+    .output(z.object({
+      user: z.object({
+        externalID: z.string().uuid(),
+        username: z.string(),
+        email: z.string(),
       })
     }))
     .mutation(async ({ input, ctx }) => {
-      const existingUser = await ctx.prisma.user.findUnique({
-        where: {
-          username: input.username,
-        }
-      });
-      if (existingUser) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "User already exists",
+      try {
+        const existingUser = await ctx.prisma.user.findUnique({
+          where: {
+            username: input.username,
+          }
         });
-      }
-      const hashedPassword = await bcrypt.hash(input.password, 10);
-      const user = await ctx.prisma.user.create({
-        data: {
-          username: input.username,
-          name: input.name,
-          email: input.email,
-          password: hashedPassword,
+        if (existingUser) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "User already exists",
+          });
         }
-      });
-      return {
-        user: {
-          externalID: user.externalID,
-          username: user.username,
-          email: user.email,
+        const hashedPassword = await bcrypt.hash(input.password, 10);
+        const user = await ctx.prisma.user.create({
+          data: {
+            username: input.username,
+            name: input.name,
+            email: input.email,
+            password: hashedPassword,
+          }
+        });
+        return {
+          user: {
+            externalID: user.externalID,
+            username: user.username,
+            name: user.name,
+            email: user.email,
+          }
         }
+      } catch (error) {
+        console.error(error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Something went wrong",
+        });
       }
     }),
   
@@ -100,46 +108,54 @@ export const authRouter = router({
     .meta({
       openapi: {
         method: "POST",
-        path: "/login",
+        path: "/auth/login",
         tags: ["auth"],
         summary: "Login a user",
       }
     })
-    .input(zod.object({
-      username: zod.string(),
-      password: zod.string(),
+    .input(z.object({
+      username: z.string(),
+      password: z.string(),
     }))
-    .output(zod.object({
-      token: zod.string(),
+    .output(z.object({
+      token: z.string(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const user = await ctx.prisma.user.findUnique({
-        where: {
-          username: input.username,
+      try {
+        const user = await ctx.prisma.user.findUnique({
+          where: {
+            username: input.username,
+          }
+        });
+        if (!user) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid credentials",
+          });
         }
-      });
-      if (!user) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Invalid credentials",
+        const validPassword = await bcrypt.compare(input.password, user.password);
+        if (!validPassword) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid credentials",
+          });
+        }
+        const token = jwt.sign({
+          externalID: user.externalID,
+        }, env.JWT_SECRET, {
+          expiresIn: "1d",
+          algorithm: "HS256",
         });
-      }
-      const validPassword = await bcrypt.compare(input.password, user.password);
-      if (!validPassword) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Invalid credentials",
-        });
-      }
-      const token = jwt.sign({
-        externalID: user.externalID,
-      }, env.JWT_SECRET, {
-        expiresIn: "1d",
-        algorithm: "HS256",
-      });
 
-      return {
-        token: token,
+        return {
+          token: token,
+        }
+      } catch (error) {
+        console.error(error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Something went wrong"
+        });
       }
     }
   ),

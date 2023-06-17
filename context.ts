@@ -1,12 +1,16 @@
 import { PrismaClient, User } from '@prisma/client';
 import { inferAsyncReturnType } from '@trpc/server';
 import { CreateHTTPContextOptions } from '@trpc/server/adapters/standalone';  
-import { env } from 'env.mjs';
-import jwt from 'jsonwebtoken';
+import { env } from 'env.js';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 interface CreateContextOptions {
   prisma: PrismaClient;
   user: User;
 }
+
+type JWTPayload = JwtPayload & {
+  externalID: string;
+};
 
 const prisma = new PrismaClient();
 
@@ -25,12 +29,14 @@ export const createContext = async(opts: CreateHTTPContextOptions) => {
       user: null,
     }
   }
-  const userExternalID = jwt.verify(token, env.JWT_SECRET) as string;
+  const jsonObj = jwt.verify(token, env.JWT_SECRET) as JWTPayload;
+  console.log(jsonObj)
   const user = await prisma.user.findUnique({
     where: {
-      externalID: userExternalID,
+      externalID: jsonObj.externalID,
     },
   });
+  console.log(user)
   return {
     req,
     res,
