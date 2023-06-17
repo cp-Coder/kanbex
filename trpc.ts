@@ -12,13 +12,14 @@ import { TRPCError, initTRPC } from '@trpc/server';
 import { OpenApiMeta } from 'trpc-openapi';
 import { transformer } from './utils/transformer';
 import { ZodError } from 'zod';
+import { Context } from './context';
 
 /**
  * This is where the tRPC API is initialized, connecting the context and transformer. We also parse
  * ZodErrors so that you get typesafety on the frontend if your procedure fails due to validation
  * errors on the backend.
  */
-const t = initTRPC.meta<OpenApiMeta>().create({
+const t = initTRPC.meta<OpenApiMeta>().context<Context>().create({
   /**
    * @see https://trpc.io/docs/v10/data-transformers
    */
@@ -49,15 +50,18 @@ export const router = t.router;
  **/
 export const publicProcedure = t.procedure;
 
-// const isAuthorized = t.middleware(({ ctx, next }) => {
-//   if (!ctx.user) {
-//     throw new TRPCError({ code: "UNAUTHORIZED"})
-//   }
-//   return next({
-//     ctx, 
-//   });
-// });
-// export const protectedProcedure = t.procedure.use(isAuthorized);
+const isAuthorized = t.middleware(({ ctx, next }) => {
+  if (!ctx.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED"})
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.user,
+    } 
+  });
+});
+export const protectedProcedure = t.procedure.use(isAuthorized);
 
 /**
  * @see https://trpc.io/docs/v10/middlewares
