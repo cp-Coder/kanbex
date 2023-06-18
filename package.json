@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Kanban Board APIs",
   "main": "index.ts",
+  "type": "module",
   "scripts": {
     "dev": "tsx watch .",
     "start": "pnpm dev && run-p prisma",
