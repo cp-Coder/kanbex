@@ -37,3 +37,21 @@ pull: # Pull database
 dev: # Start development server
 	@echo Starting development server...
 	@pnpm dev
+
+# Docker
+
+build: # Builds docker local service
+	@echo Building services...
+	@docker compose -f docker-compose.local.yml build
+
+up: # Starts docker local service
+	@echo Starting services...
+	@docker compose -f docker-compose.local.yml up -d
+
+down: # Stops docker local service
+	@echo Stopping services...
+	@docker compose -f docker-compose.local.yml down
+
+logs: # Shows docker local service logs
+	@echo Showing logs...
+	@docker compose -f docker-compose.local.yml logs --follow

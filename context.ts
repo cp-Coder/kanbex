@@ -1,7 +1,7 @@
 import { PrismaClient, User } from '@prisma/client';
 import { inferAsyncReturnType } from '@trpc/server';
 import { CreateHTTPContextOptions } from '@trpc/server/adapters/standalone';  
-import { env } from 'env.js';
+import { env } from './env';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 interface CreateContextOptions {
   prisma: PrismaClient;

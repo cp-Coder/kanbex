@@ -7,5 +7,5 @@ export const openApiDocument = generateOpenApiDocument(appRouter, {
   title: 'Kanbex APIs',
   description: 'OpenAPI compliant REST API for kanban board',
   version: '1.0.0',
-  baseUrl: 'http://localhost:3000/api',
+  baseUrl: '/api',
 });
