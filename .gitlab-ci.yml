@@ -1,0 +1,47 @@
+image: docker:24.0.2
+
+services:
+  - name: docker:24.0.2-dind
+
+stages:
+  - testing
+  - staging
+  - build
+
+variables:
+  # When using dind service, you must instruct docker to talk with the
+  # daemon started inside of the service. The daemon is available with
+  # a network connection instead of the default /var/run/docker.sock socket.
+  DOCKER_HOST: tcp://docker:2375 
+  DOCKER_TLS_CERTDIR: ""
+
+before_script:
+  - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username="$CI_REGISTRY_USER" --password-stdin
+  - docker pull $CI_REGISTRY_IMAGE:latest || true
+
+test:
+  stage: testing
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "production"
+  script:
+    - docker buildx build --cache-from=$CI_REGISTRY_IMAGE:test --file=Dockerfile .
+
+build-staging:
+  stage: staging
+  needs:
+    - job: test
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+  script:
+    - docker buildx build --cache-from=$CI_REGISTRY_IMAGE:latest --file=Dockerfile --tag=$CI_REGISTRY_IMAGE:staging .
+    - docker image push $CI_REGISTRY_IMAGE:staging
+
+build-production:
+  stage: build
+  needs:
+    - job: test
+  rules:
+    - if: $CI_COMMIT_BRANCH == "production" 
+  script:
+    - docker buildx build --cache-from=$CI_REGISTRY_IMAGE:latest --file=Dockerfile --tag=$CI_REGISTRY_IMAGE:production .
+    - docker image push $CI_REGISTRY_IMAGE:production

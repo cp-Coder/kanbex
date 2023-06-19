@@ -1,5 +1,5 @@
 # setting default node version of docker image
-ARG NODE_VERSION=lts-alpine
+ARG NODE_VERSION=lts-alpine3.18
 
 # using node image as base image
 FROM node:${NODE_VERSION} as base
