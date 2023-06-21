@@ -3,19 +3,19 @@ import { protectedProcedure, router } from "../trpc";
 import { TRPCError } from "@trpc/server";
 
 /**
- * Router handling all board related procedures
- * @link /api/board
+ * Router handling all task related procedures
+ * @link /api/task
  */
-export const boardRouter = router({
+export const taskRouter = router({
   /**
-   * Procedure for getting all boards
-   * @link /api/board
+   * Procedure for getting all tasks
+   * @link /api/task
    * @method GET
    * @example
    * ```ts
-   * const { boards } = await trpc.query("board.list", {})
+   * const { tasks } = await trpc.query("task.list", {})
    * ```
-   * @returns {Board[]} List of boards
+   * @returns {Task[]} List of tasks
    * @throws {TRPCError} 401 - Unauthorized
    * @throws {TRPCError} 500 - Internal Server Error
    */
@@ -23,9 +23,9 @@ export const boardRouter = router({
     .meta({
       openapi: {
         method: "GET",
-        path: "/board",
-        tags: ["board"],
-        summary: "Get all boards",
+        path: "/task",
+        tags: ["task"],
+        summary: "Get all tasks",
       },
     })
     .input(z.object({
@@ -34,14 +34,20 @@ export const boardRouter = router({
     }))
     .output(
       z.object({
-        boards: z.array(
+        tasks: z.array(
           z.object({
             externalID: z.string().uuid(),
             title: z.string(),
             description: z.string().nullable(),
+            dueDate: z.date(),
+            priority: z.number().min(0).max(3),
             createdBy: z.object({
               externalID: z.string().uuid(),
               username: z.string(),
+            }),
+            stage: z.object({
+              externalID: z.string().uuid(),
+              title: z.string(),
             }),
           })
         ),
@@ -49,7 +55,7 @@ export const boardRouter = router({
     )
     .query(async ({ input, ctx }) => {
       try {
-        const boards = await ctx.prisma.board.findMany({
+        const tasks = await ctx.prisma.task.findMany({
           where: {
             deleted: false,
             createdBy: {
@@ -58,36 +64,35 @@ export const boardRouter = router({
           },
           include: {
             createdBy: true,
+            stage: true,
           },
           take: input.limit,
           skip: input.offset,
         });
-
         return {
-          boards,
+          tasks,
         };
       } catch (error) {
-        console.error(error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Something went wrong",
+          message: "Failed to get tasks",
         });
       }
     }
   ),
   /**
-   * Procedure for getting a board
-   * @link /api/board/{externalID}
+   * Procedure for getting a single task
+   * @link /api/task/{externalID}
    * @method GET
    * @example
    * ```ts
-   * const { board } = await trpc.query("board.get", {
-   *  input: {
+   * const { task } = await trpc.query("task.get", 
+   *  input: { 
    *    externalID: "...",
    *  }
    * })
    * ```
-   * @returns {Board} Board
+   * @returns {Task} Task
    * @throws {TRPCError} 401 - Unauthorized
    * @throws {TRPCError} 404 - Not Found
    * @throws {TRPCError} 500 - Internal Server Error
@@ -96,9 +101,9 @@ export const boardRouter = router({
     .meta({
       openapi: {
         method: "GET",
-        path: "/board/{externalID}",
-        tags: ["board"],
-        summary: "Get a board",
+        path: "/task/{externalID}",
+        tags: ["task"],
+        summary: "Get a single task",
       },
     })
     .input(z.object({
@@ -106,29 +111,32 @@ export const boardRouter = router({
     }))
     .output(
       z.object({
-        board: z.object({
+        task: z.object({
           externalID: z.string().uuid(),
           title: z.string(),
           description: z.string().nullable(),
+          dueDate: z.date(),
+          priority: z.number().min(0).max(3),
           createdBy: z.object({
             externalID: z.string().uuid(),
             username: z.string(),
           }),
-          stage: z.array(
-            z.object({
+          stage: z.object({
+            externalID: z.string().uuid(),
+            title: z.string(),
+            board: z.object({
               externalID: z.string().uuid(),
               title: z.string(),
-              description: z.string().nullable(),
-            })
-          ),
-          createdAt: z.date(),
+            }),
+          }),
           updatedAt: z.date(),
+          createdAt: z.date(),
         }),
       })
-    )
-    .query(async ({ ctx, input }) => {
+  )
+    .query(async ({ input, ctx }) => {
       try {
-        const board = await ctx.prisma.board.findFirstOrThrow({
+        const task = await ctx.prisma.task.findFirstOrThrow({
           where: {
             externalID: input.externalID,
             deleted: false,
@@ -138,38 +146,38 @@ export const boardRouter = router({
           },
           include: {
             createdBy: true,
-            Stage: true,
+            stage: {
+              include: {
+                board: true,
+              },
+            },
           },
         });
         return {
-          board: {
-            ...board,
-            stage: board.Stage,
-          },
+          task,
         };
       } catch (error) {
-        console.error(error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Something went wrong",
+          message: "Failed to get task",
         });
       }
     }
   ),
   /**
-   * Procedure for creating a board
-   * @link /api/board
+   * Procedure for creating a task
+   * @link /api/task
    * @method POST
    * @example
    * ```ts
-   * const { board } = await trpc.mutation("board.create", {
-   *  input: {
+   * const { task } = await trpc.query("task.create", 
+   *  input: { 
    *    title: "...",
-   *    description: "..."
-   *    }
+   *    description: "...",
+   *  }
    * })
    * ```
-   * @returns {Board} Board
+   * @returns {Task} Task
    * @throws {TRPCError} 400 - Bad Request
    * @throws {TRPCError} 401 - Unauthorized
    * @throws {TRPCError} 500 - Internal Server Error
@@ -178,31 +186,42 @@ export const boardRouter = router({
     .meta({
       openapi: {
         method: "POST",
-        path: "/board",
-        tags: ["board"],
-        summary: "Create a board",
+        path: "/task",
+        tags: ["task"],
+        summary: "Create a task",
       },
     })
     .input(z.object({
       title: z.string(),
-      description: z.string().optional(),
+      description: z.string().nullable(),
+      dueDate: z.date().nullable(),
+      priority: z.number().min(0).max(3).default(0),
+      stageExternalID: z.string().uuid(),
     }))
-    .output(
-      z.object({
-        board: z.object({
+    .output(z.object({
+      task: z.object({
+        externalID: z.string().uuid(),
+        title: z.string(),
+        description: z.string().nullable(),
+        dueDate: z.date(),
+        priority: z.number().min(0).max(3),
+        createdBy: z.object({
+          externalID: z.string().uuid(),
+          username: z.string(),
+        }),
+        stage: z.object({
           externalID: z.string().uuid(),
           title: z.string(),
-          description: z.string().nullable(),
-          createdBy: z.object({
+          board: z.object({
             externalID: z.string().uuid(),
-            username: z.string(),
+            title: z.string(),
           }),
         }),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
+      }),
+    }))
+    .mutation(async ({ input, ctx }) => {
       try {
-        await ctx.prisma.board.findFirstOrThrow({
+        await ctx.prisma.stage.findFirstOrThrow({
           where: {
             title: input.title,
             deleted: false,
@@ -211,81 +230,96 @@ export const boardRouter = router({
             },
           },
         });
-        const board = await ctx.prisma.board.create({
+        const task = await ctx.prisma.task.create({
           data: {
             title: input.title,
             description: input.description,
+            dueDate: input.dueDate || new Date(),
+            priority: input.priority,
             createdBy: {
               connect: {
                 externalID: ctx.user.externalID,
               },
             },
+            stage: {
+              connect: {
+                externalID: input.stageExternalID,
+              },
+            },
           },
           include: {
             createdBy: true,
+            stage: {
+              include: {
+                board: true,
+              },
+            },
           },
         });
-
         return {
-          board,
+          task,
         };
       } catch (error) {
-        console.error(error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error as string,
+          message: "Failed to create task",
         });
       }
     }
   ),
   /**
-   * Procedure for updating a board
-   * @link /api/board/{externalID}
+   * Procedure for updating a task
+   * @link /api/task/{externalID}
    * @method PATCH
    * @example
    * ```ts
-   * const { board } = await trpc.mutation("board.update", {
-   *  input: {
-   *    externalID: "...",
-   *    title: "...",
-   *    description: "..."
-   *   }
-   * })
+   * const { task } = await trpc.query("task.update", { externalID: "...", title: "..." })
    * ```
-   * @returns {Board} Board
+   * @returns {Task} Task
    * @throws {TRPCError} 401 - Unauthorized
-   * @throws {TRPCError} 500 - Internal Server Error 
+   * @throws {TRPCError} 500 - Internal Server Error
    */
   update: protectedProcedure
     .meta({
       openapi: {
         method: "PATCH",
-        path: "/board/{externalID}",
-        tags: ["board"],
-        summary: "Update a board",
+        path: "/task/{externalID}",
+        tags: ["task"],
+        summary: "Update a task",
       },
     })
     .input(z.object({
       externalID: z.string().uuid(),
-      title: z.string().optional(),
-      description: z.string().optional(),
+      title: z.string().nullable(),
+      description: z.string().nullable(),
+      dueDate: z.date().nullable(),
+      priority: z.number().min(0).max(3).nullable(),
+      stageExternalID: z.string().uuid().nullable(),
     }))
-    .output(
-      z.object({
-        board: z.object({
+    .output(z.object({
+      task: z.object({
+        externalID: z.string().uuid(),
+        title: z.string(),
+        description: z.string().nullable(),
+        dueDate: z.date(),
+        priority: z.number().min(0).max(3),
+        createdBy: z.object({
+          externalID: z.string().uuid(),
+          username: z.string(),
+        }),
+        stage: z.object({
           externalID: z.string().uuid(),
           title: z.string(),
-          description: z.string().nullable(),
-          createdBy: z.object({
+          board: z.object({
             externalID: z.string().uuid(),
-            username: z.string(),
+            title: z.string(),
           }),
         }),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
+      }),
+    }))
+    .mutation(async ({ input, ctx }) => {
       try {
-        await ctx.prisma.board.findFirstOrThrow({
+        const task = await ctx.prisma.task.findFirstOrThrow({
           where: {
             externalID: input.externalID,
             deleted: false,
@@ -293,65 +327,70 @@ export const boardRouter = router({
               externalID: ctx.user.externalID,
             },
           },
+          include: {
+            createdBy: true,
+            stage: {
+              include: {
+                board: true,
+              },
+            },
+          },
         });
-        const board = await ctx.prisma.board.update({
+        await ctx.prisma.task.update({
           where: {
             externalID: input.externalID,
           },
           data: {
-            title: input.title,
-            description: input.description,
-          },
-          include: {
-            createdBy: true,
+            title: input.title || task.title,
+            description: input.description || task.description,
+            dueDate: input.dueDate || task.dueDate,
+            priority: input.priority || task.priority,
+            stage: {
+              connect: {
+                externalID: input.stageExternalID || task.stage.externalID,
+              },
+            },
           },
         });
-
         return {
-          board,
+          task,
         };
       } catch (error) {
-        console.error(error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error as string,
+          message: "Failed to update task",
         });
       }
     }
   ),
   /**
-   * Procedure for deleting a board
-   * @link /api/board/{externalID}
+   * Procedure for deleting a task
+   * @link /api/task/{externalID}
    * @method DELETE
    * @example
    * ```ts
-   * const { board } = await trpc.mutation("board.delete", {
-   *  input: {
-   *    externalID: "...",
-   *  }
-   * })
+   * const { task } = await trpc.query("task.delete", { externalID: "..." })
    * ```
-   * @returns 200 - OK
+   * @returns {Task} Task
    * @throws {TRPCError} 401 - Unauthorized
-   * @throws {TRPCError} 404 - Not Found
    * @throws {TRPCError} 500 - Internal Server Error
    */
   delete: protectedProcedure
     .meta({
       openapi: {
         method: "DELETE",
-        path: "/board/{externalID}",
-        tags: ["board"],
-        summary: "Delete a board",
+        path: "/task/{externalID}",
+        tags: ["task"],
+        summary: "Delete a task",
       },
     })
     .input(z.object({
       externalID: z.string().uuid(),
     }))
     .output(z.object({}))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
-         await ctx.prisma.board.findFirstOrThrow({
+        await ctx.prisma.task.findFirstOrThrow({
           where: {
             externalID: input.externalID,
             deleted: false,
@@ -360,7 +399,7 @@ export const boardRouter = router({
             },
           },
         });
-        await ctx.prisma.board.update({
+        await ctx.prisma.task.update({
           where: {
             externalID: input.externalID,
           },
@@ -370,13 +409,11 @@ export const boardRouter = router({
         });
         return {};
       } catch (error) {
-        console.error(error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error as string,
+          message: "Failed to delete task",
         });
       }
     }
   ),
-
 });

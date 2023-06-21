@@ -33,8 +33,8 @@ model User {
 model Board {
   externalID     String   @id @default(uuid())
   title          String
-  description    String
-  createdBy      User     @relation(fields: [userExternalID], references: [externalID])
+  description    String?
+  createdBy      User     @relation(fields: [userExternalID], references: [externalID], onDelete: Cascade, onUpdate: Cascade)
   userExternalID String
   deleted        Boolean  @default(false)
   createdAt      DateTime @default(now())
@@ -47,8 +47,8 @@ model Board {
 model Stage {
   externalID      String   @id @default(uuid())
   title           String
-  description     String
-  board           Board    @relation(fields: [boardExternalID], references: [externalID])
+  description     String?
+  board           Board    @relation(fields: [boardExternalID], references: [externalID], onDelete: Cascade, onUpdate: Cascade)
   boardExternalID String
   createdBy       User     @relation(fields: [userExternalID], references: [externalID])
   userExternalID  String
@@ -64,12 +64,12 @@ model Stage {
 model Task {
   externalID      String   @id @default(uuid())
   title           String
-  description     String
+  description     String?
   priority        Int      @default(0)
   dueDate         DateTime
-  stage           Stage    @relation(fields: [stageExternalID], references: [externalID])
+  stage           Stage    @relation(fields: [stageExternalID], references: [externalID], onDelete: Cascade, onUpdate: Cascade)
   stageExternalID String
-  createdBy       User     @relation(fields: [userExternalID], references: [externalID])
+  createdBy       User     @relation(fields: [userExternalID], references: [externalID], onDelete: Cascade, onUpdate: Cascade)
   userExternalID  String
   deleted         Boolean  @default(false)
   createdAt       DateTime @default(now())
